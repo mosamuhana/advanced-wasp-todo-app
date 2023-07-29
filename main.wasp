@@ -1,0 +1,287 @@
+app TodoApp {
+  wasp: {
+    version: "^0.11.1"
+  },
+  title: "Todo App",
+  // head: [],
+  dependencies: [
+    ("@tailwindcss/forms", "^0.5.4"),
+    ("@tailwindcss/typography", "^0.5.9"),
+    ("sass", "^1.64.1"),
+  ],
+  webSocket: {
+    fn: import { webSocketFn } from "@server/webSocket.js",
+    // autoConnect: false
+  },
+  auth: {
+    userEntity: User,
+    // externalAuthEntity: SocialLogin,
+    methods: {
+      /*
+      usernameAndPassword: {},
+      google: {
+        configFn: import { config } from "@server/auth/google.js",
+        getUserFieldsFn: import { getUserFields } from "@server/auth/google.js"
+      },
+      gitHub: {
+        configFn: import { config } from "@server/auth/github.js",
+        getUserFieldsFn: import { getUserFields } from "@server/auth/github.js"
+      },
+      */
+      email: {
+        fromField: {
+          name: "Todo App",
+          email: "support@example.com"
+        },
+        emailVerification: {
+          getEmailContentFn: import { getVerificationEmailContent } from "@server/auth/email.js",
+          clientRoute: EmailVerificationRoute,
+        },
+        passwordReset: {
+          getEmailContentFn: import { getPasswordResetEmailContent } from "@server/auth/email.js",
+          clientRoute: PasswordResetRoute
+        },
+        allowUnverifiedLogin: false,
+      },
+    },
+    onAuthFailedRedirectTo: "/login",
+    onAuthSucceededRedirectTo: "/profile"
+  },
+  server: {
+    setupFn: import { setup } from "@server/serverSetup.js",
+    middlewareConfigFn: import { serverMiddlewareFn } from "@server/serverSetup.js",
+  },
+  client: {
+    rootComponent: import { App } from "@client/App.tsx",
+    setupFn: import setup from "@client/clientSetup.js"
+  },
+  db: {
+    system: PostgreSQL,
+    seeds: [
+      import dev from "@server/seeds/dev.js",
+      import prod from "@server/seeds/prod.js"
+    ],
+    prisma: {
+      clientPreviewFeatures: ["extendedWhereUnique"]
+    }
+  },
+  emailSender: {
+    provider: SMTP,
+    defaultFrom: {
+      email: "support@example.com"
+    },
+  },
+}
+
+////////////////////////////////////////////////////////
+// PRISMA SCHEMA
+////////////////////////////////////////////////////////
+
+entity User {=psl
+    id                        Int           @id @default(autoincrement())
+    // Email auth
+    email                     String?       @unique
+    password                  String?
+    isEmailVerified           Boolean       @default(false)
+    emailVerificationSentAt   DateTime?
+    passwordResetSentAt       DateTime?
+    // Social login
+    externalAuthAssociations  SocialLogin[]
+    // Business logic
+    tasks                     Task[]
+psl=}
+
+entity SocialLogin {=psl
+  id          Int       @id @default(autoincrement())
+  provider    String
+  providerId  String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      Int
+  createdAt   DateTime  @default(now())
+  @@unique([provider, providerId, userId])
+psl=}
+
+entity Task {=psl
+    id          Int     @id @default(autoincrement())
+    description String
+    isDone      Boolean @default(false)
+    user        User    @relation(fields: [userId], references: [id])
+    userId      Int
+psl=}
+
+////////////////////////////////////////////////////////
+// ROUTES
+////////////////////////////////////////////////////////
+
+route SignupRoute { path: "/signup", to: SignupPage }
+route LoginRoute { path: "/login", to: LoginPage }
+route PasswordResetRoute { path: "/password-reset", to: PasswordResetPage }
+route EmailVerificationRoute { path: "/email-verification-", to: EmailVerificationPage }
+route RequestPasswordResetRoute { path: "/request-password-reset", to: RequestPasswordResetPage }
+route HomeRoute { path: "/", to: MainPage }
+route AboutRoute { path: "/about", to: AboutPage }
+route ProfileRoute { path: "/profile", to: ProfilePage }
+route TaskRoute { path: "/task/:id", to: TaskInfoPage }
+
+page SignupPage {
+  component: import Signup from "@client/pages/auth/Signup.tsx"
+}
+
+page LoginPage {
+  component: import Login from "@client/pages/auth/Login.tsx"
+}
+
+page PasswordResetPage {
+  component: import { PasswordReset } from "@client/pages/auth/PasswordReset.tsx"
+}
+
+page EmailVerificationPage {
+  component: import { EmailVerification } from "@client/pages/auth/EmailVerification.tsx"
+}
+
+page RequestPasswordResetPage {
+  component: import { RequestPasswordReset } from "@client/pages/auth/RequestPasswordReset.tsx"
+}
+
+page MainPage {
+  authRequired: true,
+  component: import Main from "@client/pages/Main.jsx"
+}
+
+page AboutPage {
+  component: import About from "@client/pages/About.jsx"
+}
+
+page ProfilePage {
+  authRequired: true,
+  component: import Profile from "@client/pages/Profile.tsx"
+}
+
+// Page for viewing a specific task
+page TaskInfoPage {
+  authRequired: true,
+  component: import TaskInfo from "@client/pages/TaskInfo.tsx"
+}
+
+////////////////////////////////////////////////////////
+// QUERIES
+////////////////////////////////////////////////////////
+
+query getTasks {
+  fn: import getTasks from "@server/queries/getTasks.js",
+  entities: [Task]
+}
+
+query getNumTasks {
+  fn: import getNumTasks from "@server/queries/getNumTasks.js",
+  entities: [Task],
+  auth: false
+}
+
+query getTask {
+  fn: import getTask from "@server/queries/getTask.js",
+  entities: [Task]
+}
+
+query getDate {
+  fn: import getDate from "@server/queries/getDate.js"
+}
+
+////////////////////////////////////////////////////////
+// ACTIONS
+////////////////////////////////////////////////////////
+
+action createTask {
+  fn: import createTask from "@server/actions/createTask.js",
+  entities: [Task]
+}
+
+action updateTask {
+  fn: import updateTask from "@server/actions/updateTask.js",
+  entities: [Task]
+}
+
+action deleteTask {
+  fn: import deleteTask from "@server/actions/deleteTask.js",
+  entities: [Task]
+}
+
+action toggleTask {
+  fn: import toggleTask from "@server/actions/toggleTask.js",
+  entities: [Task]
+}
+
+action updateTaskIsDone {
+  fn: import updateTaskIsDone from "@server/actions/updateTaskIsDone.js",
+  entities: [Task]
+}
+
+action deleteCompletedTasks {
+  fn: import deleteCompletedTasks from "@server/actions/deleteCompletedTasks.js",
+  entities: [Task]
+}
+
+action toggleAllTasks {
+  fn: import toggleAllTasks from "@server/actions/toggleAllTasks.js",
+  entities: [Task]
+}
+
+////////////////////////////////////////////////////////
+// API
+////////////////////////////////////////////////////////
+
+apiNamespace bar {
+  middlewareConfigFn: import { barNamespaceMiddlewareFn } from "@server/apis.js",
+  path: "/bar"
+}
+
+api fooBar {
+  fn: import { fooBar } from "@server/apis.js",
+  middlewareConfigFn: import { fooBarMiddlewareFn } from "@server/apis.js",
+  entities: [Task],
+  // ALL here let's our CORS work. If we did GET, we would need an apiNamespace over it with CORS.
+  httpRoute: (ALL, "/foo/bar")
+}
+
+api barBaz {
+  fn: import { barBaz } from "@server/apis.js",
+  auth: false,
+  entities: [Task],
+  httpRoute: (GET, "/bar/baz")
+}
+
+api webhookCallback {
+  fn: import { webhookCallback } from "@server/apis.js",
+  middlewareConfigFn: import { webhookCallbackMiddlewareFn } from "@server/apis.js",
+  httpRoute: (POST, "/webhook/callback"),
+  auth: false
+}
+
+////////////////////////////////////////////////////////
+// JOBS
+////////////////////////////////////////////////////////
+
+job mySpecialJob {
+  executor: PgBoss,
+  perform: {
+    fn: import { foo } from "@server/jobs/bar.js",
+    executorOptions: {
+      pgBoss: {=json { "retryLimit": 1 } json=}
+    }
+  },
+  entities: [Task]
+}
+
+job mySpecialScheduledJob {
+  executor: PgBoss,
+  perform: {
+    fn: import { foo } from "@server/jobs/bar.js"
+  },
+  schedule: {
+    cron: "0 * * * *",
+    args: {=json { "foo": "bar" } json=},
+    executorOptions: {
+      pgBoss: {=json { "retryLimit": 2 } json=}
+    }
+  }
+}
